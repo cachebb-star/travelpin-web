@@ -183,7 +183,8 @@
     }
 
     textarea {
-      min-height: 60px;
+      min-height: 40px;
+      max-height: 120px;
       resize: vertical;
     }
 
@@ -267,10 +268,12 @@
       }
       #sidebar {
         width: 100%;
-        height: 60%;
+        max-height: 55vh;
+        overflow-y: auto;
       }
       #map {
-        height: 40%;
+        flex: 1;
+        min-height: 45vh;
       }
     }
   </style>
@@ -511,7 +514,26 @@
     const statsYearlyDiv = document.getElementById("stats-yearly");
     const exportBtn = document.getElementById("export-btn");
     const importFile = document.getElementById("import-file");
+    // 備註框：需要時放大，不用時縮小
+    function setupNoteAutoSize() {
+      const baseHeight = 40;     // 平常高度
+      const focusHeight = 110;   // 輸入時高度
 
+      // 初始高度
+      noteInput.style.height = baseHeight + "px";
+
+      noteInput.addEventListener("focus", () => {
+        noteInput.style.height = focusHeight + "px";
+      });
+
+      noteInput.addEventListener("blur", () => {
+        // 沒輸入東西就縮回原本高度，有內容就保持現在的高度
+        if (!noteInput.value.trim()) {
+          noteInput.style.height = baseHeight + "px";
+        }
+      });
+    }
+      
     function initRegionSelect() {
       regionSelect.innerHTML = "";
       Regions.forEach(r => {
@@ -809,6 +831,7 @@
     renderTripList();
     refreshMarkers();
     renderStats();
+    setupNoteAutoSize();
 
     // ---------- Service Worker 註冊（PWA） ----------
 
