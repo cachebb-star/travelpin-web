@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>Travel Pin Web</title>
+
+  <!-- PWA & iOS 設定 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#111111" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <!-- 之後會放 icon 到 /icons/icon-192.png -->
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+
+  <!-- Leaflet 地圖 CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+
+  <style>
+    * { box-sizing: border-box; }
+
+    :root {
+      --bg-main: #f7f7f7;
+      --bg-panel: #ffffff;
+      --bg-panel-alt: #f0f0f0;
+      --text-main: #000000;
+      --text-sub: #666666;
+      --border: #dddddd;
+      --accent: #007aff;
+      --accent-danger: #ff3b30;
+    }
+
+    body.dark {
+      --bg-main: #050608;
+      --bg-panel: #111217;
+      --bg-panel-alt: #1b1c22;
+      --text-main: #f5f5f7;
+      --text-sub: #a0a0b0;
+      --border: #333744;
+      --accent: #0a84ff;
+      --accent-danger: #ff453a;
+    }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+      height: 100vh;
+      display: flex;
+      background: var(--bg-main);
+      color: var(--text-main);
+    }
+
+    #sidebar {
+      width: 340px;
+      max-width: 100vw;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-panel);
+    }
+
+    #map {
+      flex: 1;
+    }
+
+    header {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-panel);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    header-left {
+      display: flex;
+      align-items: center;
+    }
+
+    #title {
+      font-size: 15px;
+    }
+
+    header-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .primary-btn {
+      padding: 6px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--accent);
+      background: var(--accent);
+      color: #fff;
+      font-size: 13px;
+    }
+
+    #theme-toggle {
+      padding: 6px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--bg-panel-alt);
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    #trip-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+      background: var(--bg-main);
+    }
+
+    .trip-item {
+      padding: 8px 10px;
+      margin-bottom: 6px;
+      border-radius: 10px;
+      background: var(--bg-panel);
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+    }
+
+    .trip-item:hover {
+      border-color: var(--border);
+    }
+
+    .trip-item.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent)33;
+    }
+
+    .trip-title {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .trip-date {
+      font-size: 12px;
+      color: var(--text-sub);
+    }
+
+    .trip-note {
+      font-size: 12px;
+      color: var(--text-sub);
+      margin-top: 4px;
+    }
+
+    #trip-form-container {
+      border-top: 1px solid var(--border);
+      background: var(--bg-panel);
+      padding: 8px 10px;
+    }
+
+    #trip-form {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    label {
+      font-size: 12px;
+      color: var(--text-sub);
+    }
+
+    select, input, textarea {
+      width: 100%;
+      padding: 6px 8px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      font-size: 13px;
+      font-family: inherit;
+      background: var(--bg-panel-alt);
+      color: var(--text-main);
+    }
+
+    textarea {
+      min-height: 60px;
+      resize: vertical;
+    }
+
+    #form-buttons {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    #form-buttons button {
+      flex: 1;
+      padding: 6px 0;
+      border-radius: 8px;
+      border: 1px solid var(--accent);
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    #save-btn {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    #cancel-btn {
+      background: var(--bg-panel);
+      color: var(--accent);
+    }
+
+    #delete-btn {
+      width: 100%;
+      margin-top: 4px;
+      padding: 6px 0;
+      border-radius: 8px;
+      border: 1px solid var(--accent-danger);
+      background: var(--accent-danger);
+      color: #fff;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    #stats, #backup {
+      padding: 6px 10px 10px;
+      border-top: 1px solid var(--border);
+      background: var(--bg-panel);
+      font-size: 12px;
+    }
+
+    #stats h4, #backup h4 {
+      margin: 4px 0 6px;
+      font-size: 13px;
+    }
+
+    #stats-basic div, #stats-yearly div {
+      margin-bottom: 2px;
+    }
+
+    #backup-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    #backup-controls button {
+      padding: 6px 0;
+      border-radius: 8px;
+      border: 1px solid var(--accent);
+      background: var(--bg-panel);
+      color: var(--accent);
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    #import-file {
+      font-size: 11px;
+    }
+
+    @media (max-width: 768px) {
+      body {
+        flex-direction: column;
+      }
+      #sidebar {
+        width: 100%;
+        height: 60%;
+      }
+      #map {
+        height: 40%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="sidebar">
+    <header>
+      <div id="title">Travel Pin</div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <button id="theme-toggle" title="切換深色 / 淺色">🌙</button>
+        <button id="new-trip-btn" class="primary-btn">＋ 新增</button>
+      </div>
+    </header>
+
+    <div id="trip-list"></div>
+
+    <div id="trip-form-container">
+      <form id="trip-form">
+        <input type="hidden" id="trip-id" />
+
+        <div>
+          <label for="region-select">區域</label>
+          <select id="region-select"></select>
+        </div>
+
+        <div>
+          <label for="city-select">城市</label>
+          <select id="city-select"></select>
+        </div>
+
+        <div>
+          <label>出發日期</label>
+          <input type="date" id="start-date" />
+        </div>
+
+        <div>
+          <label>回程日期</label>
+          <input type="date" id="end-date" />
+        </div>
+
+        <div>
+          <label>備註</label>
+          <textarea id="note"></textarea>
+        </div>
+
+        <div id="form-buttons">
+          <button type="button" id="cancel-btn">取消</button>
+          <button type="submit" id="save-btn">儲存</button>
+        </div>
+
+        <button type="button" id="delete-btn" style="display:none;">刪除這筆旅行</button>
+      </form>
+    </div>
+
+    <div id="stats">
+      <h4>統計</h4>
+      <div id="stats-basic"></div>
+      <div id="stats-yearly" style="margin-top:4px;"></div>
+    </div>
+
+    <div id="backup">
+      <h4>備份 / 還原</h4>
+      <div id="backup-controls">
+        <button id="export-btn">匯出 JSON</button>
+        <input type="file" id="import-file" accept="application/json" />
+      </div>
+    </div>
+  </div>
+
+  <div id="map"></div>
+
+  <!-- Leaflet JS -->
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+
+  <script>
+    // ---------- 資料定義：區域 & 城市 ----------
+
+    const Regions = [
+      { code: "EU", name: "歐洲" },
+      { code: "US", name: "美國" },
+      { code: "JP", name: "日本" },
+      { code: "HK", name: "香港" },
+      { code: "VN", name: "越南" },
+      { code: "KR", name: "南韓" },
+      { code: "SG", name: "新加坡" },
+      { code: "IN", name: "印度" },
+    ];
+
+    const Cities = [
+      // 歐洲
+      { code: "EU_ROM", name: "Rome",       regionCode: "EU", lat: 41.9028, lng: 12.4964 },
+      { code: "EU_PAR", name: "Paris",      regionCode: "EU", lat: 48.8566, lng:  2.3522 },
+      { code: "EU_PRG", name: "Prague",     regionCode: "EU", lat: 50.0755, lng: 14.4378 },
+      { code: "EU_AMS", name: "Amsterdam",  regionCode: "EU", lat: 52.3676, lng:  4.9041 },
+      { code: "EU_LIS", name: "Lisbon",     regionCode: "EU", lat: 38.7223, lng: -9.1393 },
+      { code: "EU_KRK", name: "Krakow",     regionCode: "EU", lat: 50.0647, lng: 19.9450 },
+      { code: "EU_FLO", name: "Florence",   regionCode: "EU", lat: 43.7696, lng: 11.2558 },
+      { code: "EU_MIL", name: "Milan",      regionCode: "EU", lat: 45.4642, lng:  9.1900 },
+      { code: "EU_VEN", name: "Venice",     regionCode: "EU", lat: 45.4408, lng: 12.3155 },
+
+      // 美國
+      { code: "US_NYC", name: "New York",   regionCode: "US", lat: 40.7128, lng: -74.0060 },
+      { code: "US_LAX", name: "Los Angeles",regionCode: "US", lat: 34.0522, lng: -118.2437 },
+      { code: "US_CHI", name: "Chicago",    regionCode: "US", lat: 41.8781, lng: -87.6298 },
+      { code: "US_PHL", name: "Philadelphia",regionCode: "US",lat: 39.9526, lng: -75.1652 },
+      { code: "US_HOU", name: "Houston",    regionCode: "US", lat: 29.7604, lng: -95.3698 },
+      { code: "US_DET", name: "Detroit",    regionCode: "US", lat: 42.3314, lng: -83.0458 },
+      { code: "US_BOS", name: "Boston",     regionCode: "US", lat: 42.3601, lng: -71.0589 },
+
+      // 日本
+      { code: "JP_TYO", name: "Tokyo",      regionCode: "JP", lat: 35.6762, lng: 139.6503 },
+      { code: "JP_OSA", name: "Osaka",      regionCode: "JP", lat: 34.6937, lng: 135.5023 },
+      { code: "JP_OKI", name: "Okinawa",    regionCode: "JP", lat: 26.2124, lng: 127.6809 },
+      { code: "JP_SAP", name: "Hokkaido",   regionCode: "JP", lat: 43.0618, lng: 141.3545 },
+
+      // 香港
+      { code: "HK_HKG", name: "Hong Kong",  regionCode: "HK", lat: 22.3193, lng: 114.1694 },
+
+      // 越南
+      { code: "VN_HCM", name: "Ho Chi Minh", regionCode: "VN", lat: 10.8231, lng: 106.6297 },
+
+      // 南韓
+      { code: "KR_SEO", name: "Seoul",      regionCode: "KR", lat: 37.5665, lng: 126.9780 },
+      { code: "KR_BUS", name: "Busan",      regionCode: "KR", lat: 35.1796, lng: 129.0756 },
+
+      // 新加坡
+      { code: "SG_SIN", name: "Singapore",  regionCode: "SG", lat:  1.3521, lng: 103.8198 },
+
+      // 印度
+      { code: "IN_BLR", name: "Bangalore",  regionCode: "IN", lat: 12.9716, lng:  77.5946 },
+    ];
+
+    const CitiesByCode = Object.fromEntries(Cities.map(c => [c.code, c]));
+    const CitiesByRegion = Cities.reduce((acc, c) => {
+      acc[c.regionCode] = acc[c.regionCode] || [];
+      acc[c.regionCode].push(c);
+      return acc;
+    }, {});
+
+    // ---------- 狀態 ----------
+
+    let trips = [];          // { id, regionCode, cityCode, startDate, endDate, note }
+    let activeTripId = null; // 現在列表中選中的那筆
+    let markers = {};        // cityCode -> Leaflet marker
+
+    const STORAGE_KEY = "travelpin_web_trips_v1";
+
+    function loadTrips() {
+      const data = localStorage.getItem(STORAGE_KEY);
+      if (!data) return;
+      try {
+        trips = JSON.parse(data);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function saveTrips() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(trips));
+    }
+
+    // ---------- 地圖初始化 ----------
+
+    const map = L.map("map").setView([20, 0], 2);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 18,
+      attribution: "&copy; OpenStreetMap contributors",
+    }).addTo(map);
+
+    const colorPalette = ["red", "blue", "green", "orange", "purple", "deeppink", "teal"];
+
+    function colorForCityCode(cityCode) {
+      const idx = Math.abs(hashCode(cityCode)) % colorPalette.length;
+      return colorPalette[idx];
+    }
+
+    function hashCode(str) {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+        hash |= 0;
+      }
+      return hash;
+    }
+
+    function refreshMarkers() {
+      Object.values(markers).forEach(m => map.removeLayer(m));
+      markers = {};
+
+      const cityCodes = [...new Set(trips.map(t => t.cityCode))];
+      cityCodes.forEach(code => {
+        const city = CitiesByCode[code];
+        if (!city) return;
+        const color = colorForCityCode(code);
+
+        const marker = L.circleMarker([city.lat, city.lng], {
+          radius: 7,
+          color: "#fff",
+          weight: 2,
+          fillColor: color,
+          fillOpacity: 0.9,
+        }).addTo(map);
+
+        marker.bindPopup(`<b>${city.name}</b><br>${regionName(city.regionCode)}`);
+        markers[code] = marker;
+      });
+    }
+
+    function regionName(code) {
+      const r = Regions.find(r => r.code === code);
+      return r ? r.name : code;
+    }
+
+    function cityDisplay(cityCode, regionCode) {
+      const c = CitiesByCode[cityCode];
+      if (!c) return cityCode;
+      return `${regionName(regionCode)} · ${c.name}`;
+    }
+
+    // ---------- UI 操作 ----------
+
+    const regionSelect = document.getElementById("region-select");
+    const citySelect   = document.getElementById("city-select");
+    const tripListDiv  = document.getElementById("trip-list");
+    const tripForm     = document.getElementById("trip-form");
+    const tripIdInput  = document.getElementById("trip-id");
+    const startInput   = document.getElementById("start-date");
+    const endInput     = document.getElementById("end-date");
+    const noteInput    = document.getElementById("note");
+    const deleteBtn    = document.getElementById("delete-btn");
+
+    const statsBasicDiv = document.getElementById("stats-basic");
+    const statsYearlyDiv = document.getElementById("stats-yearly");
+    const exportBtn = document.getElementById("export-btn");
+    const importFile = document.getElementById("import-file");
+
+    function initRegionSelect() {
+      regionSelect.innerHTML = "";
+      Regions.forEach(r => {
+        const opt = document.createElement("option");
+        opt.value = r.code;
+        opt.textContent = r.name;
+        regionSelect.appendChild(opt);
+      });
+      regionSelect.value = Regions[0].code;
+      refreshCitySelect();
+    }
+
+    function refreshCitySelect() {
+      const regionCode = regionSelect.value;
+      const cities = CitiesByRegion[regionCode] || [];
+      citySelect.innerHTML = "";
+      cities.forEach(c => {
+        const opt = document.createElement("option");
+        opt.value = c.code;
+        opt.textContent = c.name;
+        citySelect.appendChild(opt);
+      });
+      if (cities.length > 0) {
+        citySelect.value = cities[0].code;
+      }
+    }
+
+    regionSelect.addEventListener("change", () => {
+      refreshCitySelect();
+    });
+
+    function renderTripList() {
+      tripListDiv.innerHTML = "";
+
+      if (trips.length === 0) {
+        const empty = document.createElement("div");
+        empty.textContent = "尚未記錄任何旅行，按右上角「＋ 新增」。";
+        empty.style.fontSize = "13px";
+        empty.style.color = "var(--text-sub)";
+        empty.style.padding = "8px";
+        tripListDiv.appendChild(empty);
+        return;
+      }
+
+      const sorted = [...trips].sort((a, b) => (b.startDate || "").localeCompare(a.startDate || ""));
+
+      sorted.forEach(trip => {
+        const item = document.createElement("div");
+        item.className = "trip-item" + (trip.id === activeTripId ? " active" : "");
+        item.dataset.id = trip.id;
+
+        const title = document.createElement("div");
+        title.className = "trip-title";
+        title.textContent = cityDisplay(trip.cityCode, trip.regionCode);
+
+        const date = document.createElement("div");
+        date.className = "trip-date";
+        date.textContent = `${trip.startDate || ""} - ${trip.endDate || ""}`;
+
+        item.appendChild(title);
+        item.appendChild(date);
+
+        if (trip.note && trip.note.trim()) {
+          const note = document.createElement("div");
+          note.className = "trip-note";
+          note.textContent = trip.note.trim().slice(0, 60);
+          item.appendChild(note);
+        }
+
+        item.addEventListener("click", () => {
+          setActiveTrip(trip.id);
+          loadTripIntoForm(trip);
+          focusCityOnMap(trip.cityCode);
+        });
+
+        tripListDiv.appendChild(item);
+      });
+    }
+
+    function setActiveTrip(id) {
+      activeTripId = id;
+      renderTripList();
+    }
+
+    function focusCityOnMap(cityCode) {
+      const city = CitiesByCode[cityCode];
+      if (!city) return;
+      map.setView([city.lat, city.lng], 6, { animate: true });
+      if (markers[cityCode]) {
+        markers[cityCode].openPopup();
+      }
+    }
+
+    function resetFormForNew() {
+      tripIdInput.value = "";
+      regionSelect.value = Regions[0].code;
+      refreshCitySelect();
+      startInput.value = "";
+      endInput.value = "";
+      noteInput.value = "";
+      deleteBtn.style.display = "none";
+    }
+
+    function loadTripIntoForm(trip) {
+      tripIdInput.value = trip.id;
+      regionSelect.value = trip.regionCode;
+      refreshCitySelect();
+      citySelect.value = trip.cityCode;
+      startInput.value = trip.startDate || "";
+      endInput.value = trip.endDate || "";
+      noteInput.value = trip.note || "";
+      deleteBtn.style.display = "block";
+    }
+
+    // 新增按鈕
+    document.getElementById("new-trip-btn").addEventListener("click", () => {
+      activeTripId = null;
+      resetFormForNew();
+      renderTripList();
+    });
+
+    // 取消按鈕：回到空表單或目前選取的那筆
+    document.getElementById("cancel-btn").addEventListener("click", () => {
+      if (activeTripId) {
+        const t = trips.find(t => t.id === activeTripId);
+        if (t) loadTripIntoForm(t);
+      } else {
+        resetFormForNew();
+      }
+    });
+
+    // 刪除
+    deleteBtn.addEventListener("click", () => {
+      const id = tripIdInput.value;
+      if (!id) return;
+      if (!confirm("確定要刪除這筆旅行嗎？")) return;
+      trips = trips.filter(t => t.id !== id);
+      saveTrips();
+      activeTripId = null;
+      resetFormForNew();
+      renderTripList();
+      refreshMarkers();
+      renderStats();
+    });
+
+    // 儲存（新增 / 更新）
+    tripForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const id = tripIdInput.value || String(Date.now());
+      const regionCode = regionSelect.value;
+      const cityCode = citySelect.value;
+      const startDate = startInput.value;
+      const endDate   = endInput.value;
+      const note      = noteInput.value;
+
+      const existingIndex = trips.findIndex(t => t.id === id);
+      const tripData = { id, regionCode, cityCode, startDate, endDate, note };
+
+      if (existingIndex >= 0) {
+        trips[existingIndex] = tripData;
+      } else {
+        trips.push(tripData);
+      }
+
+      saveTrips();
+      activeTripId = id;
+      renderTripList();
+      refreshMarkers();
+      renderStats();
+      focusCityOnMap(cityCode);
+      deleteBtn.style.display = "block";
+    });
+
+    // ---------- 統計 ----------
+
+    function daysBetween(startStr, endStr) {
+      if (!startStr || !endStr) return 0;
+      const s = new Date(startStr);
+      const e = new Date(endStr);
+      if (isNaN(s.getTime()) || isNaN(e.getTime())) return 0;
+      const ms = e - s;
+      const d = Math.floor(ms / (1000 * 60 * 60 * 24)) + 1;
+      return d > 0 ? d : 0;
+    }
+
+    function renderStats() {
+      const totalTrips = trips.length;
+      const citySet = new Set(trips.map(t => t.cityCode));
+      const regionSet = new Set(trips.map(t => t.regionCode));
+
+      let totalDays = 0;
+      const yearMap = {}; // year -> days
+
+      trips.forEach(t => {
+        const d = daysBetween(t.startDate, t.endDate);
+        totalDays += d;
+        if (t.startDate) {
+          const year = new Date(t.startDate).getFullYear();
+          if (!isNaN(year)) {
+            yearMap[year] = (yearMap[year] || 0) + d;
+          }
+        }
+      });
+
+      statsBasicDiv.innerHTML = "";
+      statsBasicDiv.innerHTML += `<div>總旅行筆數：${totalTrips}</div>`;
+      statsBasicDiv.innerHTML += `<div>造訪城市數：${citySet.size}</div>`;
+      statsBasicDiv.innerHTML += `<div>造訪區域數：${regionSet.size}</div>`;
+      statsBasicDiv.innerHTML += `<div>累計旅行天數：約 ${totalDays} 天</div>`;
+
+      statsYearlyDiv.innerHTML = "";
+      const years = Object.keys(yearMap).sort();
+      if (years.length > 0) {
+        statsYearlyDiv.innerHTML += `<div><b>年度旅行天數：</b></div>`;
+        years.forEach(y => {
+          statsYearlyDiv.innerHTML += `<div>• ${y} 年：${yearMap[y]} 天</div>`;
+        });
+      } else {
+        statsYearlyDiv.innerHTML = `<div>目前還沒有可以計算年度天數的紀錄。</div>`;
+      }
+    }
+
+    // ---------- 匯出 / 匯入 ----------
+
+    exportBtn.addEventListener("click", () => {
+      const dataStr = JSON.stringify(trips, null, 2);
+      const blob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      a.href = url;
+      a.download = `travelpin-backup-${dateStr}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    importFile.addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        if (!Array.isArray(parsed)) {
+          alert("匯入失敗：格式錯誤（不是陣列）");
+          return;
+        }
+        if (!confirm("匯入後會覆蓋目前所有旅行紀錄，確定要繼續嗎？")) return;
+        trips = parsed;
+        saveTrips();
+        renderTripList();
+        refreshMarkers();
+        renderStats();
+        alert("匯入完成！");
+      } catch (err) {
+        console.error(err);
+        alert("匯入失敗：" + err.message);
+      } finally {
+        importFile.value = "";
+      }
+    });
+
+    // ---------- 深色 / 淺色模式 ----------
+
+    const themeToggle = document.getElementById("theme-toggle");
+
+    function applyTheme(theme) {
+      if (theme === "dark") {
+        document.body.classList.add("dark");
+        themeToggle.textContent = "☀️";
+      } else {
+        document.body.classList.remove("dark");
+        themeToggle.textContent = "🌙";
+      }
+    }
+
+    const savedTheme = localStorage.getItem("travelpin_theme");
+    if (savedTheme) {
+      applyTheme(savedTheme);
+    } else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+      applyTheme("dark");
+    } else {
+      applyTheme("light");
+    }
+
+    themeToggle.addEventListener("click", () => {
+      const newTheme = document.body.classList.contains("dark") ? "light" : "dark";
+      applyTheme(newTheme);
+      localStorage.setItem("travelpin_theme", newTheme);
+    });
+
+    // ---------- 初始化 ----------
+
+    loadTrips();
+    initRegionSelect();
+    renderTripList();
+    refreshMarkers();
+    renderStats();
+
+    // ---------- Service Worker 註冊（PWA） ----------
+
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker
+          .register("./sw.js")
+          .catch(err => console.error("SW registration failed", err));
+      });
+    }
+  </script>
+</body>
+</html>
